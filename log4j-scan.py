@@ -229,6 +229,9 @@ def scan_url(url, callback_domain, proxies):
     if args.verbose:
         for r in resps:
             cprint(f"[•] URL redirected: {r.url}", "magenta")
+    if len(resps) == 0:
+        cprint("[•] All requests failed, servers seems dead.", "magenta")
+        
     return random_string
 
 
@@ -254,8 +257,7 @@ def main():
             proxies = {"http": args.proxy, "https": args.proxy}
         random_string = scan_url(url, callback_domain, proxies)
 
-        cprint("[•] Payloads sent to all URLs. Waiting for OOB callbacks.", "cyan")
-
+        cprint("[•] Payloads sent. Waiting for OOB callbacks.", "cyan")
         cprint("[•] Waiting...", "cyan")
         time.sleep(args.wait_time)
 

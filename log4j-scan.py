@@ -94,6 +94,10 @@ parser.add_argument("--waf-bypass",
                     dest="waf_bypass_payloads",
                     help="Extend scans with WAF bypass payloads.",
                     action='store_true')
+parser.add_argument("--verbose",
+                    dest="verbose",
+                    help="Enable verbose logging.",
+                    action='store_true')
 parser.add_argument("--callback-host",
                     dest="callback_host",
                     help="Callback host [Default: localhost:10000].",
@@ -181,46 +185,50 @@ def scan_url(url, callback_host, proxies):
     payloads = [payload]
     if args.waf_bypass_payloads:
         payloads.extend(generate_waf_bypass_payloads(payload_callback, random_string))
+    resps = []
     for payload in payloads:
         cprint(f"[•] URL: {url} | PAYLOAD: {payload}", "cyan")
         if args.request_type.upper() == "GET" or args.run_all_tests:
             try:
-                requests.request(url=url,
-                                 method="GET",
-                                 params={"v": payload},
-                                 headers=get_fuzzing_headers(payload),
-                                 verify=False,
-                                 timeout=timeout,
-                                 proxies=proxies)
+                resps.append(requests.request(url=url,
+                                              method="GET",
+                                              params={"v": payload},
+                                              headers=get_fuzzing_headers(payload),
+                                              verify=False,
+                                              timeout=timeout,
+                                              proxies=proxies))
             except Exception as e:
                 cprint(f"EXCEPTION: {e}")
 
         if args.request_type.upper() == "POST" or args.run_all_tests:
             try:
                 # Post body
-                requests.request(url=url,
-                                 method="POST",
-                                 params={"v": payload},
-                                 headers=get_fuzzing_headers(payload),
-                                 data=get_fuzzing_post_data(payload),
-                                 verify=False,
-                                 timeout=timeout,
-                                 proxies=proxies)
+                resps.append(requests.request(url=url,
+                                              method="POST",
+                                              params={"v": payload},
+                                              headers=get_fuzzing_headers(payload),
+                                              data=get_fuzzing_post_data(payload),
+                                              verify=False,
+                                              timeout=timeout,
+                                              proxies=proxies))
             except Exception as e:
                 cprint(f"EXCEPTION: {e}")
 
             try:
                 # JSON body
-                requests.request(url=url,
-                                 method="POST",
-                                 params={"v": payload},
-                                 headers=get_fuzzing_headers(payload),
-                                 json=get_fuzzing_post_data(payload),
-                                 verify=False,
-                                 timeout=timeout,
-                                 proxies=proxies)
+                resps.append(requests.request(url=url,
+                                              method="POST",
+                                              params={"v": payload},
+                                              headers=get_fuzzing_headers(payload),
+                                              json=get_fuzzing_post_data(payload),
+                                              verify=False,
+                                              timeout=timeout,
+                                              proxies=proxies))
             except Exception as e:
                 cprint(f"EXCEPTION: {e}")
+    if args.verbose:
+        for r in resps:
+            cprint(f"[•] URL redirected: {r.url}", "magenta")
     return random_string
 
 

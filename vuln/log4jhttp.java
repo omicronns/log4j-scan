@@ -13,7 +13,7 @@ public class log4jhttp {
     private static final Logger logger = LogManager.getLogger(log4jhttp.class);
 
     public static void main(String[] args) throws Exception {
-        HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
+        HttpServer server = HttpServer.create(new InetSocketAddress(10001), 0);
         server.createContext("/test", new MyHandler());
         server.setExecutor(null); // creates a default executor
         server.start();

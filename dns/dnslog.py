@@ -144,7 +144,7 @@ class SinDNSServer:
 
 # Now, test it
 if __name__ == "__main__":
-    outWriter = open(sys.argv[1],'a')
+        outWriter = open(sys.argv[1],'a')
 	sev = SinDNSServer()
 	#sev.addname('www.aa.com', '192.168.0.1')	# add a A record
 	#sev.addname('www.bb.com', '192.168.0.2')	# add a A record

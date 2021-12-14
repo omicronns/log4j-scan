@@ -1,4 +1,4 @@
-from python:3.10-slim-bullseye
+from python:2.7.18-slim-stretch
 
 copy dnslog.py /
 

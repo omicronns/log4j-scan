@@ -248,45 +248,45 @@ def scan_url(url, callback_domain, proxies, timeout):
         if resp_post is not None:
             cprint(f"[•] POST URL redirected: {resp_post.url}", "magenta")
     def scan_target(fuzzing_header):
-        for payload in payloads:
-            if resp_get is not None or resp_post is not None:
+        if resp_get is not None or resp_post is not None:
+            for payload in payloads:
                 cprint(f"[•] URL: {url} | PAYLOAD: {payload} | Header: {fuzzing_header}", "cyan")
-            if resp_get is not None and (args.request_type.upper() == "GET" or args.run_all_tests):
-                try:
-                    requests.request(url=resp_get.url,
-                                     method="GET",
-                                     params={name: payload for name in parameter_names},
-                                     headers={**default_headers, fuzzing_header: gen_fuzzing_header(fuzzing_header, payload)},
-                                     verify=False,
-                                     timeout=timeout,
-                                     proxies=proxies)
-                except Exception as e:
-                    cprint(f"EXCEPTION: {e}")
+                if resp_get is not None and (args.request_type.upper() == "GET" or args.run_all_tests):
+                    try:
+                        requests.request(url=resp_get.url,
+                                        method="GET",
+                                        params={name: payload for name in parameter_names},
+                                        headers={**default_headers, fuzzing_header: gen_fuzzing_header(fuzzing_header, payload)},
+                                        verify=False,
+                                        timeout=timeout,
+                                        proxies=proxies)
+                    except Exception as e:
+                        cprint(f"EXCEPTION: {e}")
 
-            if resp_post is not None and (args.request_type.upper() == "POST" or args.run_all_tests):
-                try:
-                    # Post body
-                    requests.request(url=resp_post.url,
-                                     method="POST",
-                                     headers={**default_headers, fuzzing_header: gen_fuzzing_header(fuzzing_header, payload)},
-                                     data=get_fuzzing_post_data(payload),
-                                     verify=False,
-                                     timeout=timeout,
-                                     proxies=proxies)
-                except Exception as e:
-                    cprint(f"EXCEPTION: {e}")
+                if resp_post is not None and (args.request_type.upper() == "POST" or args.run_all_tests):
+                    try:
+                        # Post body
+                        requests.request(url=resp_post.url,
+                                        method="POST",
+                                        headers={**default_headers, fuzzing_header: gen_fuzzing_header(fuzzing_header, payload)},
+                                        data=get_fuzzing_post_data(payload),
+                                        verify=False,
+                                        timeout=timeout,
+                                        proxies=proxies)
+                    except Exception as e:
+                        cprint(f"EXCEPTION: {e}")
 
-                try:
-                    # JSON body
-                    requests.request(url=resp_post.url,
-                                     method="POST",
-                                     headers={**default_headers, fuzzing_header: gen_fuzzing_header(fuzzing_header, payload)},
-                                     json=get_fuzzing_post_data(payload),
-                                     verify=False,
-                                     timeout=timeout,
-                                     proxies=proxies)
-                except Exception as e:
-                    cprint(f"EXCEPTION: {e}")
+                    try:
+                        # JSON body
+                        requests.request(url=resp_post.url,
+                                        method="POST",
+                                        headers={**default_headers, fuzzing_header: gen_fuzzing_header(fuzzing_header, payload)},
+                                        json=get_fuzzing_post_data(payload),
+                                        verify=False,
+                                        timeout=timeout,
+                                        proxies=proxies)
+                    except Exception as e:
+                        cprint(f"EXCEPTION: {e}")
 
     fuzzing_headers = get_fuzzing_headers()
 

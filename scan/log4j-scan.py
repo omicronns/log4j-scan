@@ -313,7 +313,7 @@ def main():
 
     cprint("[%] Checking for Log4j RCE CVE-2021-44228.", "magenta")
     for idx, url in enumerate(urls):
-        cprint(f"[•] URL {idx}/{len(urls)}: {url}", "magenta")
+        cprint(f"[•] Testing URL {idx}/{len(urls)}: {url}", "magenta")
         proxies = {}
         if args.proxy:
             proxies = {"http": args.proxy, "https": args.proxy}

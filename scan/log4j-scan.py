@@ -236,14 +236,15 @@ def scan_url(url, callback_domain, proxies, timeout):
     except Exception as e:
         cprint(f"EXCEPTION: {e}")
     if args.verbose:
-        if resp_get:
+        if resp_get is not None:
             cprint(f"[•] GET  URL redirected: {resp_get.url}", "magenta")
-        if resp_post:
+        if resp_post is not None:
             cprint(f"[•] POST URL redirected: {resp_post.url}", "magenta")
     def scan_target(fuzzing_header):
         for payload in payloads:
-            cprint(f"[•] URL: {url} | PAYLOAD: {payload}", "cyan")
-            if resp_get and (args.request_type.upper() == "GET" or args.run_all_tests):
+            if resp_get is not None or resp_post is not None:
+                cprint(f"[•] URL: {url} | PAYLOAD: {payload} | Header: {fuzzing_header}", "cyan")
+            if resp_get is not None and (args.request_type.upper() == "GET" or args.run_all_tests):
                 try:
                     requests.request(url=resp_get.url,
                                      method="GET",
@@ -255,7 +256,7 @@ def scan_url(url, callback_domain, proxies, timeout):
                 except Exception as e:
                     cprint(f"EXCEPTION: {e}")
 
-            if resp_post and (args.request_type.upper() == "POST" or args.run_all_tests):
+            if resp_post is not None and (args.request_type.upper() == "POST" or args.run_all_tests):
                 try:
                     # Post body
                     requests.request(url=resp_post.url,

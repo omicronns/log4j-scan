@@ -165,20 +165,23 @@ parser.add_argument("--dns-logs-path",
 args = parser.parse_args()
 
 
-def get_fuzzing_headers(payload):
-    fuzzing_headers = {}
-    fuzzing_headers.update(default_headers)
+def get_fuzzing_headers():
+    fuzzing_headers = []
     with open(args.headers_file, "r") as f:
         for i in f.readlines():
             i = i.strip()
             if i == "" or i.startswith("#"):
                 continue
-            fuzzing_headers.update({i: payload})
-    if args.exclude_user_agent_fuzzing:
-        fuzzing_headers["User-Agent"] = default_headers["User-Agent"]
-
-    fuzzing_headers["Referer"] = f'https://{fuzzing_headers["Referer"]}'
+            fuzzing_headers.append(i)
     return fuzzing_headers
+
+
+def gen_fuzzing_header(header, payload):
+    if args.exclude_user_agent_fuzzing:
+        return default_headers["User-Agent"]
+    if header == "Referer":
+        return f'https://{payload}'
+    return payload
 
 
 def get_fuzzing_post_data(payload):
@@ -222,6 +225,9 @@ def scan_url(url, callback_domain, proxies, timeout):
                                     verify=False,
                                     timeout=timeout,
                                     proxies=proxies)
+    except Exception as e:
+        cprint(f"EXCEPTION: {e}")
+    try:
         resp_post = requests.request(url=url,
                                     method="POST",
                                     verify=False,
@@ -234,7 +240,6 @@ def scan_url(url, callback_domain, proxies, timeout):
             cprint(f"[•] GET  URL redirected: {resp_get.url}", "magenta")
         if resp_post:
             cprint(f"[•] POST URL redirected: {resp_post.url}", "magenta")
-    fuzzing_headers = get_fuzzing_headers(payload)
     def scan_target(fuzzing_header):
         for payload in payloads:
             cprint(f"[•] URL: {url} | PAYLOAD: {payload}", "cyan")
@@ -243,7 +248,7 @@ def scan_url(url, callback_domain, proxies, timeout):
                     requests.request(url=resp_get.url,
                                      method="GET",
                                      params={"v": payload},
-                                     headers={fuzzing_header[0]: fuzzing_header[1]},
+                                     headers={**default_headers, fuzzing_header: gen_fuzzing_header(fuzzing_header, payload)},
                                      verify=False,
                                      timeout=timeout,
                                      proxies=proxies)
@@ -255,7 +260,7 @@ def scan_url(url, callback_domain, proxies, timeout):
                     # Post body
                     requests.request(url=resp_post.url,
                                      method="POST",
-                                     headers={fuzzing_header[0]: fuzzing_header[1]},
+                                     headers={**default_headers, fuzzing_header: gen_fuzzing_header(fuzzing_header, payload)},
                                      data=get_fuzzing_post_data(payload),
                                      verify=False,
                                      timeout=timeout,
@@ -267,7 +272,7 @@ def scan_url(url, callback_domain, proxies, timeout):
                     # JSON body
                     requests.request(url=resp_post.url,
                                      method="POST",
-                                     headers={fuzzing_header[0]: fuzzing_header[1]},
+                                     headers={**default_headers, fuzzing_header: gen_fuzzing_header(fuzzing_header, payload)},
                                      json=get_fuzzing_post_data(payload),
                                      verify=False,
                                      timeout=timeout,
@@ -275,8 +280,10 @@ def scan_url(url, callback_domain, proxies, timeout):
                 except Exception as e:
                     cprint(f"EXCEPTION: {e}")
 
+    fuzzing_headers = get_fuzzing_headers()
+
     pool = ThreadPool(10)
-    pool.map(scan_target, fuzzing_headers.items())
+    pool.map(scan_target, fuzzing_headers)
     pool.wait_completion()
 
     return random_string
